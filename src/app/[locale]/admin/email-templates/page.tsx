@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Button, Card, Input } from '@/components/ui'
-import { Edit2, Mail, Plus, Trash2 } from 'lucide-react'
+import { Edit2, Mail, Plus, Trash2, HelpCircle, X, Copy, Check } from 'lucide-react'
 import type { Locale } from '@/types'
 
 interface EmailTemplate {
@@ -24,9 +24,123 @@ const templateTypes = {
 }
 
 const availableVariables = [
-  '{{customerName}}', '{{storeName}}', '{{menuName}}', '{{staffName}}',
-  '{{dateTime}}', '{{cancelUrl}}', '{{reservationId}}'
+  { key: '{{customerName}}', ja: 'お客様のお名前', en: 'Customer name' },
+  { key: '{{storeName}}', ja: '店舗名', en: 'Store name' },
+  { key: '{{menuName}}', ja: 'メニュー名', en: 'Menu name' },
+  { key: '{{staffName}}', ja: 'スタッフ名', en: 'Staff name' },
+  { key: '{{dateTime}}', ja: '予約日時', en: 'Reservation date/time' },
+  { key: '{{cancelUrl}}', ja: 'キャンセルURL', en: 'Cancel URL' },
+  { key: '{{reservationId}}', ja: '予約ID', en: 'Reservation ID' },
 ]
+
+const sampleTemplates = {
+  reservation_complete: {
+    ja: {
+      subject: '【{{storeName}}】ご予約ありがとうございます',
+      bodyHtml: `<p>{{customerName}} 様</p>
+<p>この度は{{storeName}}をご予約いただき、誠にありがとうございます。</p>
+<h3>【ご予約内容】</h3>
+<ul>
+  <li>店舗: {{storeName}}</li>
+  <li>メニュー: {{menuName}}</li>
+  <li>担当: {{staffName}}</li>
+  <li>日時: {{dateTime}}</li>
+</ul>
+<p>ご予約のキャンセル・変更は下記URLより可能です。<br>
+<a href="{{cancelUrl}}">{{cancelUrl}}</a></p>
+<p>ご来店を心よりお待ちしております。</p>`,
+      bodyText: `{{customerName}} 様
+
+この度は{{storeName}}をご予約いただき、誠にありがとうございます。
+
+【ご予約内容】
+店舗: {{storeName}}
+メニュー: {{menuName}}
+担当: {{staffName}}
+日時: {{dateTime}}
+
+ご予約のキャンセル・変更は下記URLより可能です。
+{{cancelUrl}}
+
+ご来店を心よりお待ちしております。`
+    },
+    en: {
+      subject: '[{{storeName}}] Thank you for your reservation',
+      bodyHtml: `<p>Dear {{customerName}},</p>
+<p>Thank you for booking with {{storeName}}.</p>
+<h3>Reservation Details</h3>
+<ul>
+  <li>Store: {{storeName}}</li>
+  <li>Menu: {{menuName}}</li>
+  <li>Staff: {{staffName}}</li>
+  <li>Date/Time: {{dateTime}}</li>
+</ul>
+<p>To cancel or modify your reservation, please visit:<br>
+<a href="{{cancelUrl}}">{{cancelUrl}}</a></p>
+<p>We look forward to seeing you!</p>`,
+      bodyText: `Dear {{customerName}},
+
+Thank you for booking with {{storeName}}.
+
+Reservation Details:
+Store: {{storeName}}
+Menu: {{menuName}}
+Staff: {{staffName}}
+Date/Time: {{dateTime}}
+
+To cancel or modify your reservation, please visit:
+{{cancelUrl}}
+
+We look forward to seeing you!`
+    }
+  },
+  reservation_cancel: {
+    ja: {
+      subject: '【{{storeName}}】予約キャンセルのお知らせ',
+      bodyHtml: `<p>{{customerName}} 様</p>
+<p>下記のご予約がキャンセルされました。</p>
+<h3>【キャンセルされた予約】</h3>
+<ul>
+  <li>店舗: {{storeName}}</li>
+  <li>メニュー: {{menuName}}</li>
+  <li>日時: {{dateTime}}</li>
+</ul>
+<p>またのご利用を心よりお待ちしております。</p>`,
+      bodyText: `{{customerName}} 様
+
+下記のご予約がキャンセルされました。
+
+【キャンセルされた予約】
+店舗: {{storeName}}
+メニュー: {{menuName}}
+日時: {{dateTime}}
+
+またのご利用を心よりお待ちしております。`
+    },
+    en: {
+      subject: '[{{storeName}}] Reservation Cancelled',
+      bodyHtml: `<p>Dear {{customerName}},</p>
+<p>Your reservation has been cancelled.</p>
+<h3>Cancelled Reservation</h3>
+<ul>
+  <li>Store: {{storeName}}</li>
+  <li>Menu: {{menuName}}</li>
+  <li>Date/Time: {{dateTime}}</li>
+</ul>
+<p>We hope to see you again soon!</p>`,
+      bodyText: `Dear {{customerName}},
+
+Your reservation has been cancelled.
+
+Cancelled Reservation:
+Store: {{storeName}}
+Menu: {{menuName}}
+Date/Time: {{dateTime}}
+
+We hope to see you again soon!`
+    }
+  }
+}
 
 export default function EmailTemplatesPage() {
   const params = useParams()
@@ -36,8 +150,10 @@ export default function EmailTemplatesPage() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isGuideOpen, setIsGuideOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null)
   const [isNewTemplate, setIsNewTemplate] = useState(false)
+  const [copiedVar, setCopiedVar] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     type: 'reservation_complete',
     language: 'ja',
@@ -64,14 +180,12 @@ export default function EmailTemplatesPage() {
     e.preventDefault()
 
     if (isNewTemplate) {
-      // Create new template
       await fetch('/api/admin/email-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       })
     } else if (editingTemplate) {
-      // Update existing template
       await fetch(`/api/admin/email-templates/${editingTemplate.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -123,20 +237,46 @@ export default function EmailTemplatesPage() {
     fetchTemplates()
   }
 
+  const copyVariable = (variable: string) => {
+    navigator.clipboard.writeText(variable)
+    setCopiedVar(variable)
+    setTimeout(() => setCopiedVar(null), 2000)
+  }
+
+  const applySampleTemplate = () => {
+    const sample = sampleTemplates[formData.type as keyof typeof sampleTemplates]
+    if (sample) {
+      const langSample = sample[formData.language as 'ja' | 'en']
+      if (langSample) {
+        setFormData({
+          ...formData,
+          subject: langSample.subject,
+          bodyHtml: langSample.bodyHtml,
+          bodyText: langSample.bodyText
+        })
+      }
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">{locale === 'en' ? 'Email Templates' : 'メールテンプレート'}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {locale === 'en' ? 'Available variables: ' : '利用可能な変数: '}
-            {availableVariables.join(', ')}
+            {locale === 'en' ? 'Manage automated email notifications' : '自動送信メールの管理'}
           </p>
         </div>
-        <Button onClick={handleNew}>
-          <Plus className="w-4 h-4 mr-2" />
-          {locale === 'en' ? 'Add Template' : 'テンプレートを追加'}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setIsGuideOpen(true)}>
+            <HelpCircle className="w-4 h-4 mr-2" />
+            {locale === 'en' ? 'Guide' : '使い方ガイド'}
+          </Button>
+          <Button onClick={handleNew}>
+            <Plus className="w-4 h-4 mr-2" />
+            {locale === 'en' ? 'Add Template' : 'テンプレートを追加'}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4">
@@ -174,6 +314,178 @@ export default function EmailTemplatesPage() {
         )}
       </div>
 
+      {/* Guide Modal */}
+      {isGuideOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-3xl my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold">
+                {locale === 'en' ? 'Email Template Guide' : 'メールテンプレート作成ガイド'}
+              </h2>
+              <button onClick={() => setIsGuideOpen(false)} className="text-gray-500 hover:text-gray-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Overview */}
+              <section>
+                <h3 className="text-lg font-semibold mb-2 text-blue-600">
+                  {locale === 'en' ? '1. Overview' : '1. 概要'}
+                </h3>
+                <p className="text-gray-600">
+                  {locale === 'en'
+                    ? 'Email templates are used to automatically send notifications to customers. You can customize the content for different situations like reservation confirmation, cancellation, etc.'
+                    : 'メールテンプレートは、お客様への自動通知メールに使用されます。予約完了、キャンセルなど、状況に応じた内容をカスタマイズできます。'}
+                </p>
+              </section>
+
+              {/* Template Types */}
+              <section>
+                <h3 className="text-lg font-semibold mb-2 text-blue-600">
+                  {locale === 'en' ? '2. Template Types' : '2. テンプレートタイプ'}
+                </h3>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2">{locale === 'en' ? 'Type' : 'タイプ'}</th>
+                        <th className="text-left py-2">{locale === 'en' ? 'When Sent' : '送信タイミング'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b">
+                        <td className="py-2 font-medium">{locale === 'en' ? 'Reservation Complete' : '予約完了'}</td>
+                        <td className="py-2 text-gray-600">{locale === 'en' ? 'When a reservation is confirmed' : '予約が確定した時'}</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="py-2 font-medium">{locale === 'en' ? 'Reservation Changed' : '予約変更'}</td>
+                        <td className="py-2 text-gray-600">{locale === 'en' ? 'When reservation details are modified' : '予約内容が変更された時'}</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="py-2 font-medium">{locale === 'en' ? 'Reservation Cancelled' : '予約キャンセル'}</td>
+                        <td className="py-2 text-gray-600">{locale === 'en' ? 'When a reservation is cancelled' : '予約がキャンセルされた時'}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 font-medium">{locale === 'en' ? 'Reminder' : 'リマインド'}</td>
+                        <td className="py-2 text-gray-600">{locale === 'en' ? 'Before the reservation date' : '予約日の前日など'}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* Variables */}
+              <section>
+                <h3 className="text-lg font-semibold mb-2 text-blue-600">
+                  {locale === 'en' ? '3. Available Variables' : '3. 利用可能な変数'}
+                </h3>
+                <p className="text-gray-600 mb-3">
+                  {locale === 'en'
+                    ? 'Use these variables in your templates. They will be automatically replaced with actual values when the email is sent.'
+                    : '以下の変数をテンプレート内で使用できます。メール送信時に実際の値に自動置換されます。'}
+                </p>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="grid gap-2">
+                    {availableVariables.map((v) => (
+                      <div key={v.key} className="flex items-center justify-between bg-white p-2 rounded border">
+                        <div>
+                          <code className="text-sm bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{v.key}</code>
+                          <span className="text-gray-600 ml-3 text-sm">{v[locale]}</span>
+                        </div>
+                        <button
+                          onClick={() => copyVariable(v.key)}
+                          className="text-gray-400 hover:text-gray-600 p-1"
+                          title={locale === 'en' ? 'Copy' : 'コピー'}
+                        >
+                          {copiedVar === v.key ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              {/* HTML vs Text */}
+              <section>
+                <h3 className="text-lg font-semibold mb-2 text-blue-600">
+                  {locale === 'en' ? '4. HTML vs Text' : '4. HTML形式とテキスト形式'}
+                </h3>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <div>
+                    <h4 className="font-medium">{locale === 'en' ? 'HTML Body' : '本文（HTML）'}</h4>
+                    <p className="text-sm text-gray-600">
+                      {locale === 'en'
+                        ? 'Supports formatting like bold, links, lists, etc. Used by most email clients.'
+                        : '太字、リンク、リストなどの装飾が可能。ほとんどのメールクライアントで表示されます。'}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="font-medium">{locale === 'en' ? 'Text Body' : '本文（テキスト）'}</h4>
+                    <p className="text-sm text-gray-600">
+                      {locale === 'en'
+                        ? 'Plain text fallback for email clients that cannot display HTML.'
+                        : 'HTMLを表示できないメールクライアント用のプレーンテキスト版。'}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              {/* Tips */}
+              <section>
+                <h3 className="text-lg font-semibold mb-2 text-blue-600">
+                  {locale === 'en' ? '5. Tips' : '5. 作成のコツ'}
+                </h3>
+                <ul className="list-disc list-inside text-gray-600 space-y-2">
+                  <li>{locale === 'en' ? 'Keep subject lines short and clear' : '件名は短く分かりやすく'}</li>
+                  <li>{locale === 'en' ? 'Include all important reservation details' : '予約内容の重要な情報を含める'}</li>
+                  <li>{locale === 'en' ? 'Always include the cancel URL in confirmation emails' : '予約完了メールには必ずキャンセルURLを入れる'}</li>
+                  <li>{locale === 'en' ? 'Create templates for both Japanese and English if needed' : '必要に応じて日本語・英語両方のテンプレートを作成'}</li>
+                  <li>{locale === 'en' ? 'Test by making a test reservation' : 'テスト予約を入れて動作確認する'}</li>
+                </ul>
+              </section>
+
+              {/* Sample */}
+              <section>
+                <h3 className="text-lg font-semibold mb-2 text-blue-600">
+                  {locale === 'en' ? '6. Sample Template' : '6. サンプルテンプレート'}
+                </h3>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-medium mb-2">{locale === 'en' ? 'Reservation Complete (Japanese)' : '予約完了（日本語）'}</h4>
+                  <div className="bg-white border rounded p-3 text-sm">
+                    <p className="font-medium mb-2">{locale === 'en' ? 'Subject:' : '件名:'}</p>
+                    <code className="block bg-gray-100 p-2 rounded mb-3">【{'{{storeName}}'}】ご予約ありがとうございます</code>
+                    <p className="font-medium mb-2">{locale === 'en' ? 'Body:' : '本文:'}</p>
+                    <pre className="bg-gray-100 p-2 rounded text-xs whitespace-pre-wrap">{`{{customerName}} 様
+
+この度は{{storeName}}をご予約いただき、
+誠にありがとうございます。
+
+【ご予約内容】
+店舗: {{storeName}}
+メニュー: {{menuName}}
+担当: {{staffName}}
+日時: {{dateTime}}
+
+ご予約のキャンセル・変更は下記URLより可能です。
+{{cancelUrl}}
+
+ご来店を心よりお待ちしております。`}</pre>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <Button onClick={() => setIsGuideOpen(false)}>
+                {locale === 'en' ? 'Close' : '閉じる'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit/Create Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl my-8">
@@ -184,36 +496,64 @@ export default function EmailTemplatesPage() {
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               {isNewTemplate && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {locale === 'en' ? 'Type' : 'タイプ'}
-                    </label>
-                    <select
-                      className="w-full px-4 py-2 border rounded-lg"
-                      value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                    >
-                      {Object.entries(templateTypes).map(([key, value]) => (
-                        <option key={key} value={key}>{value[locale]}</option>
-                      ))}
-                    </select>
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {locale === 'en' ? 'Type' : 'タイプ'}
+                      </label>
+                      <select
+                        className="w-full px-4 py-2 border rounded-lg"
+                        value={formData.type}
+                        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                      >
+                        {Object.entries(templateTypes).map(([key, value]) => (
+                          <option key={key} value={key}>{value[locale]}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {locale === 'en' ? 'Language' : '言語'}
+                      </label>
+                      <select
+                        className="w-full px-4 py-2 border rounded-lg"
+                        value={formData.language}
+                        onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                      >
+                        <option value="ja">日本語</option>
+                        <option value="en">English</option>
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {locale === 'en' ? 'Language' : '言語'}
-                    </label>
-                    <select
-                      className="w-full px-4 py-2 border rounded-lg"
-                      value={formData.language}
-                      onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-                    >
-                      <option value="ja">日本語</option>
-                      <option value="en">English</option>
-                    </select>
-                  </div>
-                </div>
+                  {sampleTemplates[formData.type as keyof typeof sampleTemplates] && (
+                    <Button type="button" variant="outline" size="sm" onClick={applySampleTemplate}>
+                      {locale === 'en' ? 'Apply Sample Template' : 'サンプルを適用'}
+                    </Button>
+                  )}
+                </>
               )}
+
+              {/* Variables Reference */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm font-medium text-blue-700 mb-2">
+                  {locale === 'en' ? 'Available Variables (click to copy):' : '利用可能な変数（クリックでコピー）:'}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {availableVariables.map((v) => (
+                    <button
+                      key={v.key}
+                      type="button"
+                      onClick={() => copyVariable(v.key)}
+                      className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 transition-colors"
+                      title={v[locale]}
+                    >
+                      {copiedVar === v.key ? <Check className="w-3 h-3 inline mr-1" /> : null}
+                      {v.key}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <Input
                 label={locale === 'en' ? 'Subject' : '件名'}
