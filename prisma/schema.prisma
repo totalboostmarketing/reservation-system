@@ -1,0 +1,310 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 管理者ユーザー
+model Admin {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  password       String
+  name           String
+  role           String   @default("admin") // admin, store_manager, staff
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  failedAttempts Int      @default(0)
+  lockedUntil    DateTime?
+}
+
+// 店舗
+model Store {
+  id            String   @id @default(cuid())
+  nameJa        String
+  nameEn        String
+  address       String
+  mapUrl        String?
+  latitude      Float?
+  longitude     Float?
+  phone         String
+  email         String
+  bedCount      Int      @default(1)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  businessHours   BusinessHour[]
+  holidays        Holiday[]
+  staff           Staff[]
+  reservations    Reservation[]
+  storeMenus      StoreMenu[]
+  campaigns       CampaignStore[]
+  coupons         CouponStore[]
+}
+
+// 営業時間（曜日別）
+model BusinessHour {
+  id        String   @id @default(cuid())
+  storeId   String
+  dayOfWeek Int      // 0=日, 1=月, ..., 6=土
+  openTime  String   // "10:00"
+  closeTime String   // "22:00"
+  isOpen    Boolean  @default(true)
+
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, dayOfWeek])
+}
+
+// 定休日・特別休業日
+model Holiday {
+  id        String   @id @default(cuid())
+  storeId   String
+  date      DateTime
+  reason    String?
+
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, date])
+}
+
+// スタッフ
+model Staff {
+  id           String   @id @default(cuid())
+  storeId      String
+  nameJa       String
+  nameEn       String
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  reservations Reservation[]
+  staffMenus   StaffMenu[]
+}
+
+// メニュー（コース）
+model Menu {
+  id             String   @id @default(cuid())
+  nameJa         String
+  nameEn         String
+  descriptionJa  String?
+  descriptionEn  String?
+  duration       Int      // 所要時間（分）
+  bufferBefore   Int      @default(0) // 前バッファ（分）
+  bufferAfter    Int      @default(0) // 後バッファ（分）
+  price          Int      // 料金
+  taxRate        Float    @default(0.1) // 税率
+  displayOrder   Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  storeMenus     StoreMenu[]
+  staffMenus     StaffMenu[]
+  reservations   Reservation[]
+  campaignMenus  CampaignMenu[]
+  couponMenus    CouponMenu[]
+}
+
+// 店舗×メニュー（どの店舗でどのメニューを提供するか）
+model StoreMenu {
+  id       String  @id @default(cuid())
+  storeId  String
+  menuId   String
+  isActive Boolean @default(true)
+
+  store    Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  menu     Menu    @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, menuId])
+}
+
+// スタッフ×メニュー（どのスタッフがどのメニューを担当できるか）
+model StaffMenu {
+  id       String  @id @default(cuid())
+  staffId  String
+  menuId   String
+
+  staff    Staff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  menu     Menu    @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, menuId])
+}
+
+// 予約
+model Reservation {
+  id              String   @id @default(cuid())
+  storeId         String
+  menuId          String
+  staffId         String?
+  startTime       DateTime
+  endTime         DateTime
+
+  // 顧客情報
+  customerName    String
+  customerEmail   String
+  customerPhone   String
+  language        String   @default("ja") // ja, en
+
+  // 予約情報
+  channel         String   @default("web") // web, phone
+  status          String   @default("reserved") // reserved, visited, cancelled, noshow
+
+  // 料金
+  originalPrice   Int
+  discountAmount  Int      @default(0)
+  finalPrice      Int
+
+  // クーポン・キャンペーン
+  couponId        String?
+  campaignId      String?
+
+  // 管理メモ
+  adminNote       String?
+
+  // キャンセル用トークン
+  cancelToken     String   @unique @default(cuid())
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String   @default("customer") // customer, admin
+  updatedBy       String?
+
+  store           Store    @relation(fields: [storeId], references: [id])
+  menu            Menu     @relation(fields: [menuId], references: [id])
+  staff           Staff?   @relation(fields: [staffId], references: [id])
+  coupon          Coupon?  @relation(fields: [couponId], references: [id])
+  campaign        Campaign? @relation(fields: [campaignId], references: [id])
+  auditLogs       ReservationAuditLog[]
+}
+
+// 予約監査ログ
+model ReservationAuditLog {
+  id            String   @id @default(cuid())
+  reservationId String
+  action        String   // created, updated, status_changed, cancelled
+  changes       String   // JSON string of changes
+  performedBy   String   // customer, admin, system
+  performedAt   DateTime @default(now())
+
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+}
+
+// キャンペーン
+model Campaign {
+  id             String   @id @default(cuid())
+  nameJa         String
+  nameEn         String
+  descriptionJa  String?
+  descriptionEn  String?
+  discountType   String   // percent, fixed
+  discountValue  Int
+  startDate      DateTime
+  endDate        DateTime
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  campaignStores CampaignStore[]
+  campaignMenus  CampaignMenu[]
+  reservations   Reservation[]
+}
+
+// キャンペーン×店舗
+model CampaignStore {
+  id         String   @id @default(cuid())
+  campaignId String
+  storeId    String
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, storeId])
+}
+
+// キャンペーン×メニュー
+model CampaignMenu {
+  id         String   @id @default(cuid())
+  campaignId String
+  menuId     String
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  menu       Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, menuId])
+}
+
+// クーポン
+model Coupon {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  nameJa            String
+  nameEn            String
+  discountType      String   // percent, fixed
+  discountValue     Int
+  startDate         DateTime
+  endDate           DateTime
+  minPurchaseAmount Int?     // 最低利用金額
+  maxUsageTotal     Int?     // 全体利用上限
+  maxUsagePerUser   Int?     // 1人あたり利用上限
+  usageCount        Int      @default(0)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  couponStores      CouponStore[]
+  couponMenus       CouponMenu[]
+  reservations      Reservation[]
+}
+
+// クーポン×店舗
+model CouponStore {
+  id       String @id @default(cuid())
+  couponId String
+  storeId  String
+
+  coupon   Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  store    Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([couponId, storeId])
+}
+
+// クーポン×メニュー
+model CouponMenu {
+  id       String @id @default(cuid())
+  couponId String
+  menuId   String
+
+  coupon   Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  menu     Menu   @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@unique([couponId, menuId])
+}
+
+// メールテンプレート
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  type      String   // reservation_complete, reservation_change, reservation_cancel, reminder
+  language  String   // ja, en
+  subject   String
+  bodyHtml  String
+  bodyText  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([type, language])
+}
+
+// システム設定
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
