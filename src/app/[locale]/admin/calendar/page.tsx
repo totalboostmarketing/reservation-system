@@ -64,7 +64,12 @@ export default function CalendarPage() {
   const [isUpdating, setIsUpdating] = useState(false)
   const [showMiniCalendar, setShowMiniCalendar] = useState(true)
 
-  const hours = Array.from({ length: 14 }, (_, i) => i + 9) // 9:00 - 22:00
+  // 15分刻みのタイムスロット (9:00 - 22:00)
+  const timeSlots = Array.from({ length: 52 }, (_, i) => {
+    const hour = Math.floor(i / 4) + 9
+    const minute = (i % 4) * 15
+    return { hour, minute, label: `${hour}:${minute.toString().padStart(2, '0')}` }
+  })
 
   const fetchReservations = useCallback(() => {
     if (selectedStoreId) {
@@ -142,13 +147,13 @@ export default function CalendarPage() {
   const miniCalendarEnd = addDays(miniCalendarStart, 41)
   const miniCalendarDays = eachDayOfInterval({ start: miniCalendarStart, end: miniCalendarEnd })
 
-  const getReservationsForStaffAndTime = (staffId: string, date: Date, hour: number) => {
+  const getReservationsForStaffAndTime = (staffId: string, date: Date, hour: number, minute: number) => {
     return reservations.filter((r) => {
       const start = new Date(r.startTime)
       const isSameDay = format(start, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
-      const startsAtHour = start.getHours() === hour
+      const startsAtSlot = start.getHours() === hour && start.getMinutes() >= minute && start.getMinutes() < minute + 15
       const isStaffMatch = r.staff?.id === staffId
-      return isSameDay && startsAtHour && isStaffMatch
+      return isSameDay && startsAtSlot && isStaffMatch
     })
   }
 
@@ -169,13 +174,13 @@ export default function CalendarPage() {
     e.dataTransfer.dropEffect = 'move'
   }
 
-  const handleDrop = async (e: React.DragEvent, staffId: string, date: Date, hour: number) => {
+  const handleDrop = async (e: React.DragEvent, staffId: string, date: Date, hour: number, minute: number) => {
     e.preventDefault()
     if (!draggedReservation || isUpdating) return
 
     const originalStart = new Date(draggedReservation.startTime)
     const newStartDate = new Date(date)
-    newStartDate.setHours(hour, 0, 0, 0)
+    newStartDate.setHours(hour, minute, 0, 0)
 
     if (
       originalStart.getTime() === newStartDate.getTime() &&
@@ -456,25 +461,25 @@ export default function CalendarPage() {
                 ))}
               </div>
 
-              {/* Time slots */}
-              {hours.map((hour) => (
+              {/* Time slots - 15分刻み */}
+              {timeSlots.map((slot, slotIdx) => (
                 <div
-                  key={hour}
-                  className="grid border-b"
+                  key={slot.label}
+                  className={`grid ${slot.minute === 0 ? 'border-t border-gray-300' : 'border-t border-gray-100'}`}
                   style={{ gridTemplateColumns: `60px repeat(${staff.length * days.length}, 1fr)` }}
                 >
-                  <div className="p-1 text-xs text-gray-500 border-r bg-gray-50 text-right pr-2">
-                    {hour}:00
+                  <div className={`text-xs text-gray-500 border-r bg-gray-50 text-right pr-2 ${slot.minute === 0 ? 'py-1' : 'py-0.5'}`}>
+                    {slot.minute === 0 ? slot.label : ''}
                   </div>
                   {days.map((day) => (
                     staff.map((s, sIdx) => {
-                      const slotReservations = getReservationsForStaffAndTime(s.id, day, hour)
+                      const slotReservations = getReservationsForStaffAndTime(s.id, day, slot.hour, slot.minute)
                       return (
                         <div
-                          key={`${day.toISOString()}-${s.id}-${hour}`}
-                          className={`min-h-[50px] border-r last:border-r-0 relative ${sIdx === 0 ? 'border-l-2 border-l-gray-200' : ''} ${draggedReservation ? 'bg-blue-50' : ''}`}
+                          key={`${day.toISOString()}-${s.id}-${slot.label}`}
+                          className={`min-h-[20px] border-r last:border-r-0 relative ${sIdx === 0 ? 'border-l-2 border-l-gray-200' : ''} ${draggedReservation ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                           onDragOver={handleDragOver}
-                          onDrop={(e) => handleDrop(e, s.id, day, hour)}
+                          onDrop={(e) => handleDrop(e, s.id, day, slot.hour, slot.minute)}
                         >
                           {slotReservations.map((r) => (
                             <div
@@ -482,10 +487,11 @@ export default function CalendarPage() {
                               draggable
                               onDragStart={(e) => handleDragStart(e, r)}
                               onClick={() => setSelectedReservation(r)}
-                              className={`${statusColors[r.status]} text-white text-xs p-1 m-0.5 rounded cursor-pointer hover:opacity-90 shadow-sm`}
+                              className={`${statusColors[r.status]} text-white text-xs p-1 rounded cursor-pointer hover:opacity-90 shadow-sm absolute inset-x-0.5 z-10`}
+                              style={{ minHeight: `${Math.max(20, Math.ceil(r.menu.duration / 15) * 20)}px` }}
                             >
                               <div className="font-medium truncate">{r.customerName}</div>
-                              <div className="opacity-80 truncate">{locale === 'en' ? r.menu.nameEn : r.menu.nameJa}</div>
+                              <div className="opacity-80 truncate text-[10px]">{locale === 'en' ? r.menu.nameEn : r.menu.nameJa}</div>
                             </div>
                           ))}
                         </div>
