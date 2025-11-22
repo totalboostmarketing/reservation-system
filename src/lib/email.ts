@@ -1,16 +1,49 @@
 import nodemailer from 'nodemailer'
 import { prisma } from './prisma'
 
-// メール送信の設定
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-})
+// SMTP設定をデータベースから取得
+async function getSmtpSettings() {
+  const settings = await prisma.systemSetting.findMany({
+    where: {
+      key: {
+        in: ['smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass', 'smtp_from']
+      }
+    }
+  })
+
+  const settingsMap: Record<string, string> = {}
+  for (const s of settings) {
+    settingsMap[s.key] = s.value
+  }
+
+  return {
+    host: settingsMap.smtp_host || process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(settingsMap.smtp_port || process.env.SMTP_PORT || '587'),
+    secure: (settingsMap.smtp_secure || process.env.SMTP_SECURE) === 'true',
+    user: settingsMap.smtp_user || process.env.SMTP_USER || '',
+    pass: settingsMap.smtp_pass || process.env.SMTP_PASS || '',
+    from: settingsMap.smtp_from || process.env.SMTP_FROM || '',
+  }
+}
+
+// メール送信用のトランスポーターを作成
+async function createTransporter() {
+  const smtp = await getSmtpSettings()
+
+  if (!smtp.user || !smtp.pass) {
+    return null
+  }
+
+  return nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    auth: {
+      user: smtp.user,
+      pass: smtp.pass,
+    },
+  })
+}
 
 /**
  * テンプレートの変数と条件分岐を処理する
@@ -83,8 +116,11 @@ interface SendEmailOptions {
 
 export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   try {
+    // トランスポーターを作成（SMTP設定をDBから取得）
+    const transporter = await createTransporter()
+
     // SMTP設定がない場合はスキップ（開発環境用）
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    if (!transporter) {
       console.log('=== Email would be sent (SMTP not configured) ===')
       console.log('To:', options.to)
       console.log('Template:', options.templateType)
@@ -110,6 +146,9 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
       return false
     }
 
+    // SMTP設定を取得（送信元アドレス用）
+    const smtpSettings = await getSmtpSettings()
+
     // 変数と条件分岐を処理
     const subject = processTemplate(template.subject, options.variables)
     const html = processTemplate(template.bodyHtml, options.variables)
@@ -117,7 +156,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
 
     // メール送信
     const info = await transporter.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      from: smtpSettings.from || smtpSettings.user,
       to: options.to,
       subject,
       html,
