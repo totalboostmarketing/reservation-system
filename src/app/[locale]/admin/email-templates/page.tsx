@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Button, Card, Input } from '@/components/ui'
-import { Edit2, Mail } from 'lucide-react'
+import { Edit2, Mail, Plus, Trash2 } from 'lucide-react'
 import type { Locale } from '@/types'
 
 interface EmailTemplate {
@@ -37,7 +37,15 @@ export default function EmailTemplatesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null)
-  const [formData, setFormData] = useState({ subject: '', bodyHtml: '', bodyText: '' })
+  const [isNewTemplate, setIsNewTemplate] = useState(false)
+  const [formData, setFormData] = useState({
+    type: 'reservation_complete',
+    language: 'ja',
+    subject: '',
+    bodyHtml: '',
+    bodyText: '',
+    isActive: true
+  })
 
   const fetchTemplates = async () => {
     try {
@@ -54,31 +62,81 @@ export default function EmailTemplatesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingTemplate) return
-    await fetch(`/api/admin/email-templates/${editingTemplate.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    })
+
+    if (isNewTemplate) {
+      // Create new template
+      await fetch('/api/admin/email-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+    } else if (editingTemplate) {
+      // Update existing template
+      await fetch(`/api/admin/email-templates/${editingTemplate.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+    }
+
     setIsModalOpen(false)
     setEditingTemplate(null)
+    setIsNewTemplate(false)
     fetchTemplates()
   }
 
   const handleEdit = (t: EmailTemplate) => {
     setEditingTemplate(t)
-    setFormData({ subject: t.subject, bodyHtml: t.bodyHtml, bodyText: t.bodyText })
+    setIsNewTemplate(false)
+    setFormData({
+      type: t.type,
+      language: t.language,
+      subject: t.subject,
+      bodyHtml: t.bodyHtml,
+      bodyText: t.bodyText,
+      isActive: t.isActive
+    })
     setIsModalOpen(true)
+  }
+
+  const handleNew = () => {
+    setEditingTemplate(null)
+    setIsNewTemplate(true)
+    setFormData({
+      type: 'reservation_complete',
+      language: 'ja',
+      subject: '',
+      bodyHtml: '',
+      bodyText: '',
+      isActive: true
+    })
+    setIsModalOpen(true)
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm(locale === 'en' ? 'Are you sure you want to delete this template?' : 'このテンプレートを削除しますか？')) {
+      return
+    }
+    await fetch(`/api/admin/email-templates/${id}`, {
+      method: 'DELETE',
+    })
+    fetchTemplates()
   }
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">{locale === 'en' ? 'Email Templates' : 'メールテンプレート'}</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {locale === 'en' ? 'Available variables: ' : '利用可能な変数: '}
-          {availableVariables.join(', ')}
-        </p>
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold">{locale === 'en' ? 'Email Templates' : 'メールテンプレート'}</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {locale === 'en' ? 'Available variables: ' : '利用可能な変数: '}
+            {availableVariables.join(', ')}
+          </p>
+        </div>
+        <Button onClick={handleNew}>
+          <Plus className="w-4 h-4 mr-2" />
+          {locale === 'en' ? 'Add Template' : 'テンプレートを追加'}
+        </Button>
       </div>
 
       <div className="grid gap-4">
@@ -103,33 +161,117 @@ export default function EmailTemplatesPage() {
                 <h3 className="font-semibold">{t.subject}</h3>
                 <p className="text-sm text-gray-500 mt-1 line-clamp-2">{t.bodyText.substring(0, 100)}...</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => handleEdit(t)}>
-                <Edit2 className="w-4 h-4" />
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={() => handleEdit(t)}>
+                  <Edit2 className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => handleDelete(t.id)}>
+                  <Trash2 className="w-4 h-4 text-red-500" />
+                </Button>
+              </div>
             </Card>
           ))
         )}
       </div>
 
-      {isModalOpen && editingTemplate && (
+      {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl my-8">
             <h2 className="text-xl font-bold mb-4">
-              {locale === 'en' ? 'Edit Template' : 'テンプレートを編集'} - {templateTypes[editingTemplate.type as keyof typeof templateTypes]?.[locale]} ({editingTemplate.language.toUpperCase()})
+              {isNewTemplate
+                ? (locale === 'en' ? 'Add New Template' : '新規テンプレート')
+                : (locale === 'en' ? 'Edit Template' : 'テンプレートを編集')}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <Input label={locale === 'en' ? 'Subject' : '件名'} value={formData.subject} onChange={(e) => setFormData({ ...formData, subject: e.target.value })} required />
+              {isNewTemplate && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {locale === 'en' ? 'Type' : 'タイプ'}
+                    </label>
+                    <select
+                      className="w-full px-4 py-2 border rounded-lg"
+                      value={formData.type}
+                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    >
+                      {Object.entries(templateTypes).map(([key, value]) => (
+                        <option key={key} value={key}>{value[locale]}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {locale === 'en' ? 'Language' : '言語'}
+                    </label>
+                    <select
+                      className="w-full px-4 py-2 border rounded-lg"
+                      value={formData.language}
+                      onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                    >
+                      <option value="ja">日本語</option>
+                      <option value="en">English</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <Input
+                label={locale === 'en' ? 'Subject' : '件名'}
+                value={formData.subject}
+                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                required
+              />
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === 'en' ? 'Body (HTML)' : '本文（HTML）'}</label>
-                <textarea className="w-full px-4 py-2 border rounded-lg font-mono text-sm" rows={10} value={formData.bodyHtml} onChange={(e) => setFormData({ ...formData, bodyHtml: e.target.value })} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {locale === 'en' ? 'Body (HTML)' : '本文（HTML）'}
+                </label>
+                <textarea
+                  className="w-full px-4 py-2 border rounded-lg font-mono text-sm"
+                  rows={10}
+                  value={formData.bodyHtml}
+                  onChange={(e) => setFormData({ ...formData, bodyHtml: e.target.value })}
+                  required
+                />
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === 'en' ? 'Body (Text)' : '本文（テキスト）'}</label>
-                <textarea className="w-full px-4 py-2 border rounded-lg font-mono text-sm" rows={6} value={formData.bodyText} onChange={(e) => setFormData({ ...formData, bodyText: e.target.value })} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {locale === 'en' ? 'Body (Text)' : '本文（テキスト）'}
+                </label>
+                <textarea
+                  className="w-full px-4 py-2 border rounded-lg font-mono text-sm"
+                  rows={6}
+                  value={formData.bodyText}
+                  onChange={(e) => setFormData({ ...formData, bodyText: e.target.value })}
+                  required
+                />
               </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={formData.isActive}
+                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="isActive" className="text-sm">
+                  {locale === 'en' ? 'Active' : '有効'}
+                </label>
+              </div>
+
               <div className="flex gap-2 justify-end pt-4">
-                <Button type="button" variant="outline" onClick={() => { setIsModalOpen(false); setEditingTemplate(null) }}>{locale === 'en' ? 'Cancel' : 'キャンセル'}</Button>
-                <Button type="submit">{locale === 'en' ? 'Save' : '保存'}</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { setIsModalOpen(false); setEditingTemplate(null); setIsNewTemplate(false) }}
+                >
+                  {locale === 'en' ? 'Cancel' : 'キャンセル'}
+                </Button>
+                <Button type="submit">
+                  {locale === 'en' ? 'Save' : '保存'}
+                </Button>
               </div>
             </form>
           </div>

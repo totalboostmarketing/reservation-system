@@ -16,9 +16,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { type, language, subject, bodyHtml, bodyText } = body
+    const { type, language, subject, bodyHtml, bodyText, isActive = true } = body
     const template = await prisma.emailTemplate.create({
-      data: { type, language, subject, bodyHtml, bodyText },
+      data: { type, language, subject, bodyHtml, bodyText, isActive },
     })
     return NextResponse.json(template, { status: 201 })
   } catch (error) {
