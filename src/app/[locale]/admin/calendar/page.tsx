@@ -63,6 +63,10 @@ export default function CalendarPage() {
   const [draggedReservation, setDraggedReservation] = useState<Reservation | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
   const [showMiniCalendar, setShowMiniCalendar] = useState(true)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editDate, setEditDate] = useState('')
+  const [editTime, setEditTime] = useState('')
+  const [editStaffId, setEditStaffId] = useState('')
 
   // 15分刻みのタイムスロット (9:00 - 22:00)
   const timeSlots = Array.from({ length: 52 }, (_, i) => {
@@ -237,6 +241,64 @@ export default function CalendarPage() {
       console.error('Failed to update status:', error)
     }
   }
+
+  const startEditing = () => {
+    if (!selectedReservation) return
+    const startDate = parseISO(selectedReservation.startTime)
+    setEditDate(format(startDate, 'yyyy-MM-dd'))
+    setEditTime(format(startDate, 'HH:mm'))
+    setEditStaffId(selectedReservation.staff?.id || '')
+    setIsEditing(true)
+  }
+
+  const cancelEditing = () => {
+    setIsEditing(false)
+  }
+
+  const saveChanges = async () => {
+    if (!selectedReservation || isUpdating) return
+
+    setIsUpdating(true)
+    try {
+      const [hours, minutes] = editTime.split(':').map(Number)
+      const newStartDate = parseISO(editDate)
+      newStartDate.setHours(hours, minutes, 0, 0)
+
+      const duration = selectedReservation.menu.duration
+      const newEndDate = new Date(newStartDate)
+      newEndDate.setMinutes(newEndDate.getMinutes() + duration)
+
+      const res = await fetch(`/api/admin/reservations/${selectedReservation.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startTime: newStartDate.toISOString(),
+          endTime: newEndDate.toISOString(),
+          staffId: editStaffId || null,
+        }),
+      })
+
+      if (res.ok) {
+        fetchReservations()
+        setSelectedReservation(null)
+        setIsEditing(false)
+      } else {
+        alert(locale === 'en' ? 'Failed to update reservation' : '予約の更新に失敗しました')
+      }
+    } catch (error) {
+      console.error('Failed to update reservation:', error)
+      alert(locale === 'en' ? 'Failed to update reservation' : '予約の更新に失敗しました')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  // 15分刻みの時間オプションを生成
+  const timeOptions = Array.from({ length: 52 }, (_, i) => {
+    const hour = Math.floor(i / 4) + 9
+    const minute = (i % 4) * 15
+    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+  })
 
   const formatDateTime = (dateStr: string) => {
     const date = parseISO(dateStr)
@@ -507,14 +569,16 @@ export default function CalendarPage() {
 
       {/* Reservation Detail Modal */}
       {selectedReservation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedReservation(null)}>
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => { setSelectedReservation(null); setIsEditing(false); }}>
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">
-                {locale === 'en' ? 'Reservation Details' : '予約詳細'}
+                {isEditing
+                  ? (locale === 'en' ? 'Edit Reservation' : '予約編集')
+                  : (locale === 'en' ? 'Reservation Details' : '予約詳細')}
               </h2>
               <button
-                onClick={() => setSelectedReservation(null)}
+                onClick={() => { setSelectedReservation(null); setIsEditing(false); }}
                 className="text-gray-500 hover:text-gray-700 p-1 hover:bg-gray-100 rounded"
               >
                 <X className="w-5 h-5" />
@@ -547,45 +611,123 @@ export default function CalendarPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-gray-400" />
-                  <span>{formatDateTime(selectedReservation.startTime)}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Scissors className="w-5 h-5 text-gray-400" />
-                  <span>
-                    {locale === 'en' ? selectedReservation.menu.nameEn : selectedReservation.menu.nameJa}
-                    <span className="text-gray-500 ml-2">({selectedReservation.menu.duration}{locale === 'en' ? 'min' : '分'})</span>
-                  </span>
-                </div>
-                {selectedReservation.staff && (
-                  <div className="flex items-center gap-3">
-                    <User className="w-5 h-5 text-gray-400" />
-                    <span>{locale === 'en' ? selectedReservation.staff.nameEn : selectedReservation.staff.nameJa}</span>
+              {isEditing ? (
+                /* Edit Mode */
+                <div className="space-y-4 border rounded-lg p-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {locale === 'en' ? 'Date' : '日付'}
+                    </label>
+                    <input
+                      type="date"
+                      value={editDate}
+                      onChange={(e) => setEditDate(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
                   </div>
-                )}
-                <div className="text-lg font-bold mt-2">
-                  ¥{selectedReservation.finalPrice.toLocaleString()}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {locale === 'en' ? 'Time' : '時間'}
+                    </label>
+                    <select
+                      value={editTime}
+                      onChange={(e) => setEditTime(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    >
+                      {timeOptions.map((time) => (
+                        <option key={time} value={time}>{time}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {locale === 'en' ? 'Staff' : '担当スタッフ'}
+                    </label>
+                    <select
+                      value={editStaffId}
+                      onChange={(e) => setEditStaffId(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    >
+                      <option value="">{locale === 'en' ? 'Not specified' : '指名なし'}</option>
+                      {staff.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {locale === 'en' ? s.nameEn : s.nameJa}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      onClick={saveChanges}
+                      isLoading={isUpdating}
+                      className="flex-1"
+                    >
+                      {locale === 'en' ? 'Save' : '保存'}
+                    </Button>
+                    <Button
+                      onClick={cancelEditing}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      {locale === 'en' ? 'Cancel' : 'キャンセル'}
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* View Mode */
+                <>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-5 h-5 text-gray-400" />
+                      <span>{formatDateTime(selectedReservation.startTime)}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Scissors className="w-5 h-5 text-gray-400" />
+                      <span>
+                        {locale === 'en' ? selectedReservation.menu.nameEn : selectedReservation.menu.nameJa}
+                        <span className="text-gray-500 ml-2">({selectedReservation.menu.duration}{locale === 'en' ? 'min' : '分'})</span>
+                      </span>
+                    </div>
+                    {selectedReservation.staff && (
+                      <div className="flex items-center gap-3">
+                        <User className="w-5 h-5 text-gray-400" />
+                        <span>{locale === 'en' ? selectedReservation.staff.nameEn : selectedReservation.staff.nameJa}</span>
+                      </div>
+                    )}
+                    <div className="text-lg font-bold mt-2">
+                      ¥{selectedReservation.finalPrice.toLocaleString()}
+                    </div>
+                  </div>
 
-              {selectedReservation.status === 'reserved' && (
-                <div className="flex gap-2 pt-4 border-t">
-                  <Button
-                    onClick={() => handleStatusChange(selectedReservation.id, 'visited')}
-                    className="flex-1 bg-green-500 hover:bg-green-600"
-                  >
-                    {locale === 'en' ? 'Visited' : '来店済み'}
-                  </Button>
-                  <Button
-                    onClick={() => handleStatusChange(selectedReservation.id, 'noshow')}
-                    variant="outline"
-                    className="flex-1 text-red-500 border-red-500 hover:bg-red-50"
-                  >
-                    {locale === 'en' ? 'No Show' : 'ノーショー'}
-                  </Button>
-                </div>
+                  {selectedReservation.status === 'reserved' && (
+                    <>
+                      <div className="pt-4 border-t">
+                        <Button
+                          onClick={startEditing}
+                          variant="outline"
+                          className="w-full mb-3"
+                        >
+                          {locale === 'en' ? 'Edit Date/Time/Staff' : '日時・スタッフを変更'}
+                        </Button>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleStatusChange(selectedReservation.id, 'visited')}
+                          className="flex-1 bg-green-500 hover:bg-green-600"
+                        >
+                          {locale === 'en' ? 'Visited' : '来店済み'}
+                        </Button>
+                        <Button
+                          onClick={() => handleStatusChange(selectedReservation.id, 'noshow')}
+                          variant="outline"
+                          className="flex-1 text-red-500 border-red-500 hover:bg-red-50"
+                        >
+                          {locale === 'en' ? 'No Show' : 'ノーショー'}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </>
               )}
             </div>
           </div>
