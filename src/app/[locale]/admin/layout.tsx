@@ -34,7 +34,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const params = useParams()
   const pathname = usePathname()
   const router = useRouter()
-  const locale = params.locale as string
+
+  // Get locale from params or extract from pathname, default to 'ja'
+  const locale = (params.locale as string) || pathname.split('/')[1] || 'ja'
 
   const [user, setUser] = useState<{ name: string; email: string } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -45,6 +47,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (isLoginPage) {
       setLoading(false)
+      return
+    }
+
+    // Wait for locale to be available
+    if (!locale || locale === 'undefined') {
       return
     }
 
@@ -68,7 +75,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
 
     checkAuth()
-  }, [isLoginPage, locale, router])
+  }, [isLoginPage, locale, router, pathname])
 
   const handleLogout = async () => {
     try {
