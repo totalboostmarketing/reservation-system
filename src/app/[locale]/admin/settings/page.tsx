@@ -12,12 +12,7 @@ interface Settings {
   reminder_enabled: string
   cancel_deadline_hours: string
   booking_range_days: string
-  smtp_host: string
-  smtp_port: string
-  smtp_secure: string
-  smtp_user: string
-  smtp_pass: string
-  smtp_from: string
+  notification_email: string
 }
 
 interface AdminAccount {
@@ -38,12 +33,7 @@ export default function SettingsPage() {
     reminder_enabled: 'true',
     cancel_deadline_hours: '24',
     booking_range_days: '90',
-    smtp_host: '',
-    smtp_port: '587',
-    smtp_secure: 'false',
-    smtp_user: '',
-    smtp_pass: '',
-    smtp_from: '',
+    notification_email: '',
   })
   const [adminAccount, setAdminAccount] = useState<AdminAccount>({
     email: '',
@@ -54,7 +44,6 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isSavingAdmin, setIsSavingAdmin] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
 
@@ -286,72 +275,21 @@ export default function SettingsPage() {
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <Mail className="w-5 h-5 text-gray-600" />
-            <h2 className="text-lg font-semibold">{locale === 'en' ? 'Email Settings (SMTP)' : 'メール設定（SMTP）'}</h2>
+            <h2 className="text-lg font-semibold">{locale === 'en' ? 'Email Settings' : 'メール設定'}</h2>
           </div>
           <p className="text-sm text-gray-500 mb-4">
             {locale === 'en'
-              ? 'Configure SMTP settings to send emails. For Gmail, use smtp.gmail.com and an App Password.'
-              : 'メール送信のためのSMTP設定です。Gmailの場合はsmtp.gmail.comとアプリパスワードを使用してください。'}
+              ? 'Set the email address to receive reservation notifications.'
+              : '予約通知を受信するメールアドレスを設定してください。'}
           </p>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label={locale === 'en' ? 'SMTP Host' : 'SMTPホスト'}
-                value={settings.smtp_host}
-                onChange={(e) => setSettings({ ...settings, smtp_host: e.target.value })}
-                placeholder="smtp.gmail.com"
-              />
-              <Input
-                label={locale === 'en' ? 'SMTP Port' : 'SMTPポート'}
-                value={settings.smtp_port}
-                onChange={(e) => setSettings({ ...settings, smtp_port: e.target.value })}
-                placeholder="587"
-              />
-            </div>
             <Input
-              label={locale === 'en' ? 'Email Address (SMTP User)' : 'メールアドレス（SMTPユーザー）'}
+              label={locale === 'en' ? 'Notification Email Address' : '通知メールアドレス'}
               type="email"
-              value={settings.smtp_user}
-              onChange={(e) => setSettings({ ...settings, smtp_user: e.target.value })}
-              placeholder="your-email@gmail.com"
+              value={settings.notification_email}
+              onChange={(e) => setSettings({ ...settings, notification_email: e.target.value })}
+              placeholder="your-email@example.com"
             />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {locale === 'en' ? 'Password (App Password for Gmail)' : 'パスワード（Gmailの場合はアプリパスワード）'}
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  className="w-full px-4 py-2 border rounded-lg pr-10"
-                  value={settings.smtp_pass}
-                  onChange={(e) => setSettings({ ...settings, smtp_pass: e.target.value })}
-                  placeholder="••••••••••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-            <Input
-              label={locale === 'en' ? 'From Address' : '送信元アドレス'}
-              value={settings.smtp_from}
-              onChange={(e) => setSettings({ ...settings, smtp_from: e.target.value })}
-              placeholder="Your Salon <your-email@gmail.com>"
-            />
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-              <p className="font-medium text-blue-700 mb-2">
-                {locale === 'en' ? 'Gmail Setup Instructions:' : 'Gmail設定手順:'}
-              </p>
-              <ol className="list-decimal list-inside text-blue-600 space-y-1">
-                <li>{locale === 'en' ? 'Enable 2-Step Verification in your Google Account' : 'Googleアカウントで2段階認証を有効化'}</li>
-                <li>{locale === 'en' ? 'Go to App Passwords (myaccount.google.com/apppasswords)' : 'アプリパスワードを作成（myaccount.google.com/apppasswords）'}</li>
-                <li>{locale === 'en' ? 'Create a new app password and use it here' : '生成された16文字のパスワードをここに入力'}</li>
-              </ol>
-            </div>
           </div>
         </Card>
       </div>

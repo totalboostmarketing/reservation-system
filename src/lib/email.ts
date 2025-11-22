@@ -1,34 +1,29 @@
 import nodemailer from 'nodemailer'
 import { prisma } from './prisma'
 
-// SMTP設定をデータベースから取得
-async function getSmtpSettings() {
-  const settings = await prisma.systemSetting.findMany({
-    where: {
-      key: {
-        in: ['smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass', 'smtp_from']
-      }
-    }
-  })
-
-  const settingsMap: Record<string, string> = {}
-  for (const s of settings) {
-    settingsMap[s.key] = s.value
-  }
-
+// SMTP設定（環境変数から取得）
+function getSmtpConfig() {
   return {
-    host: settingsMap.smtp_host || process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(settingsMap.smtp_port || process.env.SMTP_PORT || '587'),
-    secure: (settingsMap.smtp_secure || process.env.SMTP_SECURE) === 'true',
-    user: settingsMap.smtp_user || process.env.SMTP_USER || '',
-    pass: settingsMap.smtp_pass || process.env.SMTP_PASS || '',
-    from: settingsMap.smtp_from || process.env.SMTP_FROM || '',
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || '',
   }
 }
 
+// 通知メールアドレスをデータベースから取得
+async function getNotificationEmail(): Promise<string | null> {
+  const setting = await prisma.systemSetting.findUnique({
+    where: { key: 'notification_email' }
+  })
+  return setting?.value || null
+}
+
 // メール送信用のトランスポーターを作成
-async function createTransporter() {
-  const smtp = await getSmtpSettings()
+function createTransporter() {
+  const smtp = getSmtpConfig()
 
   if (!smtp.user || !smtp.pass) {
     return null
@@ -116,8 +111,9 @@ interface SendEmailOptions {
 
 export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   try {
-    // トランスポーターを作成（SMTP設定をDBから取得）
-    const transporter = await createTransporter()
+    // トランスポーターを作成
+    const transporter = createTransporter()
+    const smtpConfig = getSmtpConfig()
 
     // SMTP設定がない場合はスキップ（開発環境用）
     if (!transporter) {
@@ -146,9 +142,6 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
       return false
     }
 
-    // SMTP設定を取得（送信元アドレス用）
-    const smtpSettings = await getSmtpSettings()
-
     // 変数と条件分岐を処理
     const subject = processTemplate(template.subject, options.variables)
     const html = processTemplate(template.bodyHtml, options.variables)
@@ -156,7 +149,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
 
     // メール送信
     const info = await transporter.sendMail({
-      from: smtpSettings.from || smtpSettings.user,
+      from: smtpConfig.from,
       to: options.to,
       subject,
       html,
@@ -167,6 +160,37 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
     return true
   } catch (error) {
     console.error('Failed to send email:', error)
+    return false
+  }
+}
+
+// 管理者への通知メールを送信
+export async function sendAdminNotification(subject: string, body: string): Promise<boolean> {
+  try {
+    const transporter = createTransporter()
+    const smtpConfig = getSmtpConfig()
+    const notificationEmail = await getNotificationEmail()
+
+    if (!transporter || !notificationEmail) {
+      console.log('=== Admin notification would be sent ===')
+      console.log('To:', notificationEmail || 'Not configured')
+      console.log('Subject:', subject)
+      console.log('Body:', body)
+      console.log('========================================')
+      return true
+    }
+
+    await transporter.sendMail({
+      from: smtpConfig.from,
+      to: notificationEmail,
+      subject,
+      text: body,
+    })
+
+    console.log('Admin notification sent to:', notificationEmail)
+    return true
+  } catch (error) {
+    console.error('Failed to send admin notification:', error)
     return false
   }
 }
