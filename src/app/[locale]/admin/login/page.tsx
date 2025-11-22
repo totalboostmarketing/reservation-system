@@ -22,7 +22,8 @@ export default function AdminLoginPage() {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
+        credentials: 'include'
       })
 
       const data = await response.json()
@@ -32,8 +33,8 @@ export default function AdminLoginPage() {
         return
       }
 
-      router.push(`/${locale}/admin`)
-      router.refresh()
+      // Use window.location for full page reload to ensure cookie is sent
+      window.location.href = `/${locale}/admin/reservations`
     } catch (err) {
       console.error('Login error:', err)
       setError('ログイン中にエラーが発生しました')

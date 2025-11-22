@@ -40,6 +40,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const [user, setUser] = useState<{ name: string; email: string } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [authChecked, setAuthChecked] = useState(false)
 
   // Skip auth check for login page
   const isLoginPage = pathname.includes('/admin/login')
@@ -50,14 +51,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return
     }
 
-    // Wait for locale to be available
-    if (!locale || locale === 'undefined') {
+    // Prevent multiple auth checks
+    if (authChecked) {
       return
     }
 
     const checkAuth = async () => {
       try {
-        const response = await fetch('/api/auth/session')
+        const response = await fetch('/api/auth/session', {
+          credentials: 'include'
+        })
         const data = await response.json()
 
         if (!data.authenticated) {
@@ -66,16 +69,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         }
 
         setUser(data.user)
+        setLoading(false)
       } catch (error) {
         console.error('Auth check error:', error)
         router.push(`/${locale}/admin/login`)
-      } finally {
-        setLoading(false)
       }
+      setAuthChecked(true)
     }
 
     checkAuth()
-  }, [isLoginPage, locale, router, pathname])
+  }, [isLoginPage, locale, router, authChecked])
 
   const handleLogout = async () => {
     try {
