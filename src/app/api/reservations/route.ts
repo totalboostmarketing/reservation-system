@@ -168,6 +168,7 @@ export async function POST(request: Request) {
       language: reservation.language,
       startTime: reservation.startTime,
       cancelToken: reservation.cancelToken,
+      finalPrice: reservation.finalPrice,
       store: reservation.store,
       menu: reservation.menu,
       staff: reservation.staff,

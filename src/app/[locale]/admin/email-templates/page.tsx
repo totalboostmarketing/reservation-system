@@ -43,7 +43,7 @@ const sampleTemplates = {
 <ul>
   <li>店舗: {{storeName}}</li>
   <li>メニュー: {{menuName}}</li>
-  <li>担当: {{staffName}}</li>
+  {{#if staffName}}<li>担当: {{staffName}}</li>{{else}}<li>担当: 指名なし</li>{{/if}}
   <li>日時: {{dateTime}}</li>
 </ul>
 <p>ご予約のキャンセル・変更は下記URLより可能です。<br>
@@ -56,7 +56,7 @@ const sampleTemplates = {
 【ご予約内容】
 店舗: {{storeName}}
 メニュー: {{menuName}}
-担当: {{staffName}}
+{{#if staffName}}担当: {{staffName}}{{else}}担当: 指名なし{{/if}}
 日時: {{dateTime}}
 
 ご予約のキャンセル・変更は下記URLより可能です。
@@ -138,6 +138,66 @@ Menu: {{menuName}}
 Date/Time: {{dateTime}}
 
 We hope to see you again soon!`
+    }
+  },
+  reminder: {
+    ja: {
+      subject: '【{{storeName}}】明日のご予約リマインド',
+      bodyHtml: `<p>{{customerName}} 様</p>
+<p>明日のご予約についてお知らせいたします。</p>
+<h3>【ご予約内容】</h3>
+<ul>
+  <li>店舗: {{storeName}}</li>
+  <li>メニュー: {{menuName}}</li>
+  {{#if staffName}}<li>担当: {{staffName}}</li>{{else}}<li>担当: 指名なし</li>{{/if}}
+  <li>日時: {{dateTime}}</li>
+</ul>
+<p>ご予約の変更・キャンセルは下記URLより可能です。<br>
+<a href="{{cancelUrl}}">{{cancelUrl}}</a></p>
+<p>お会いできることを楽しみにしております。</p>`,
+      bodyText: `{{customerName}} 様
+
+明日のご予約についてお知らせいたします。
+
+【ご予約内容】
+店舗: {{storeName}}
+メニュー: {{menuName}}
+{{#if staffName}}担当: {{staffName}}{{else}}担当: 指名なし{{/if}}
+日時: {{dateTime}}
+
+ご予約の変更・キャンセルは下記URLより可能です。
+{{cancelUrl}}
+
+お会いできることを楽しみにしております。`
+    },
+    en: {
+      subject: '[{{storeName}}] Reminder: Your appointment tomorrow',
+      bodyHtml: `<p>Dear {{customerName}},</p>
+<p>This is a reminder about your appointment tomorrow.</p>
+<h3>Reservation Details</h3>
+<ul>
+  <li>Store: {{storeName}}</li>
+  <li>Menu: {{menuName}}</li>
+  {{#if staffName}}<li>Staff: {{staffName}}</li>{{else}}<li>Staff: Not specified</li>{{/if}}
+  <li>Date/Time: {{dateTime}}</li>
+</ul>
+<p>To modify or cancel your reservation, please visit:<br>
+<a href="{{cancelUrl}}">{{cancelUrl}}</a></p>
+<p>We look forward to seeing you!</p>`,
+      bodyText: `Dear {{customerName}},
+
+This is a reminder about your appointment tomorrow.
+
+Reservation Details:
+Store: {{storeName}}
+Menu: {{menuName}}
+{{#if staffName}}Staff: {{staffName}}{{else}}Staff: Not specified{{/if}}
+Date/Time: {{dateTime}}
+
+To modify or cancel your reservation, please visit:
+{{cancelUrl}}
+
+We look forward to seeing you!`
     }
   }
 }
@@ -431,16 +491,56 @@ export default function EmailTemplatesPage() {
                 </div>
               </section>
 
+              {/* Conditional */}
+              <section>
+                <h3 className="text-lg font-semibold mb-2 text-blue-600">
+                  {locale === 'en' ? '5. Conditional Display' : '5. 条件分岐'}
+                </h3>
+                <p className="text-gray-600 mb-3">
+                  {locale === 'en'
+                    ? 'You can show or hide content based on whether a variable has a value.'
+                    : '変数の有無によって、表示する内容を切り替えることができます。'}
+                </p>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                  <div>
+                    <h4 className="font-medium text-sm mb-2">{locale === 'en' ? 'Show only if variable exists:' : '変数がある場合のみ表示:'}</h4>
+                    <code className="block bg-white border p-2 rounded text-xs">
+                      {'{{#if staffName}}担当: {{staffName}}{{/if}}'}
+                    </code>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm mb-2">{locale === 'en' ? 'Show different content based on variable:' : '変数の有無で内容を切り替え:'}</h4>
+                    <code className="block bg-white border p-2 rounded text-xs whitespace-pre-wrap">
+                      {'{{#if staffName}}担当: {{staffName}}{{else}}担当: 指名なし{{/if}}'}
+                    </code>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm mb-2">{locale === 'en' ? 'Show only if variable is empty:' : '変数がない場合のみ表示:'}</h4>
+                    <code className="block bg-white border p-2 rounded text-xs">
+                      {'{{#unless staffName}}※スタッフは当日決定します{{/unless}}'}
+                    </code>
+                  </div>
+                  <div className="bg-yellow-50 border border-yellow-200 p-3 rounded">
+                    <p className="text-sm text-yellow-800">
+                      {locale === 'en'
+                        ? 'Example: If customer selects a staff, show their name. If not, show "Not specified".'
+                        : '例：お客様がスタッフを指名した場合は名前を表示、指名なしの場合は「指名なし」と表示'}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
               {/* Tips */}
               <section>
                 <h3 className="text-lg font-semibold mb-2 text-blue-600">
-                  {locale === 'en' ? '5. Tips' : '5. 作成のコツ'}
+                  {locale === 'en' ? '6. Tips' : '6. 作成のコツ'}
                 </h3>
                 <ul className="list-disc list-inside text-gray-600 space-y-2">
                   <li>{locale === 'en' ? 'Keep subject lines short and clear' : '件名は短く分かりやすく'}</li>
                   <li>{locale === 'en' ? 'Include all important reservation details' : '予約内容の重要な情報を含める'}</li>
                   <li>{locale === 'en' ? 'Always include the cancel URL in confirmation emails' : '予約完了メールには必ずキャンセルURLを入れる'}</li>
                   <li>{locale === 'en' ? 'Create templates for both Japanese and English if needed' : '必要に応じて日本語・英語両方のテンプレートを作成'}</li>
+                  <li>{locale === 'en' ? 'Use conditional display for staff name (may be empty)' : 'スタッフ名は条件分岐を使う（指名なしの場合があるため）'}</li>
                   <li>{locale === 'en' ? 'Test by making a test reservation' : 'テスト予約を入れて動作確認する'}</li>
                 </ul>
               </section>
@@ -448,7 +548,7 @@ export default function EmailTemplatesPage() {
               {/* Sample */}
               <section>
                 <h3 className="text-lg font-semibold mb-2 text-blue-600">
-                  {locale === 'en' ? '6. Sample Template' : '6. サンプルテンプレート'}
+                  {locale === 'en' ? '7. Sample Template' : '7. サンプルテンプレート'}
                 </h3>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <h4 className="font-medium mb-2">{locale === 'en' ? 'Reservation Complete (Japanese)' : '予約完了（日本語）'}</h4>
@@ -464,7 +564,7 @@ export default function EmailTemplatesPage() {
 【ご予約内容】
 店舗: {{storeName}}
 メニュー: {{menuName}}
-担当: {{staffName}}
+{{#if staffName}}担当: {{staffName}}{{else}}担当: 指名なし{{/if}}
 日時: {{dateTime}}
 
 ご予約のキャンセル・変更は下記URLより可能です。
