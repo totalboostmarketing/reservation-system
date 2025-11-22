@@ -243,11 +243,11 @@ async function main() {
     },
   ]
 
+  // Clear existing templates and recreate
+  await prisma.emailTemplate.deleteMany({})
   for (const template of emailTemplates) {
-    await prisma.emailTemplate.upsert({
-      where: { type_language: { type: template.type, language: template.language } },
-      update: {},
-      create: template,
+    await prisma.emailTemplate.create({
+      data: template,
     })
   }
   console.log('Created email templates')

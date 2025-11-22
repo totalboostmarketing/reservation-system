@@ -93,17 +93,19 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
       return true
     }
 
-    // テンプレートを取得
-    const template = await prisma.emailTemplate.findUnique({
+    // テンプレートを取得（有効なテンプレートを1つ取得）
+    const template = await prisma.emailTemplate.findFirst({
       where: {
-        type_language: {
-          type: options.templateType,
-          language: options.language,
-        },
+        type: options.templateType,
+        language: options.language,
+        isActive: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
       },
     })
 
-    if (!template || !template.isActive) {
+    if (!template) {
       console.log(`Email template not found or inactive: ${options.templateType} (${options.language})`)
       return false
     }

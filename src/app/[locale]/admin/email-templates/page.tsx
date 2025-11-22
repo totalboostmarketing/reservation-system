@@ -8,6 +8,7 @@ import type { Locale } from '@/types'
 
 interface EmailTemplate {
   id: string
+  name: string | null
   type: string
   language: string
   subject: string
@@ -149,6 +150,7 @@ export default function EmailTemplatesPage() {
   const [isNewTemplate, setIsNewTemplate] = useState(false)
   const [copiedVar, setCopiedVar] = useState<string | null>(null)
   const [formData, setFormData] = useState({
+    name: '',
     type: 'reservation_complete',
     language: 'ja',
     subject: '',
@@ -218,6 +220,7 @@ export default function EmailTemplatesPage() {
     setEditingTemplate(t)
     setIsNewTemplate(false)
     setFormData({
+      name: t.name || '',
       type: t.type,
       language: t.language,
       subject: t.subject,
@@ -231,6 +234,7 @@ export default function EmailTemplatesPage() {
     setEditingTemplate(null)
     setIsNewTemplate(true)
     setFormData({
+      name: '',
       type: 'reservation_complete',
       language: 'ja',
       subject: '',
@@ -302,6 +306,7 @@ export default function EmailTemplatesPage() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <Mail className="w-5 h-5 text-blue-500" />
+                  {t.name && <span className="font-medium text-gray-800">{t.name}</span>}
                   <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
                     {templateTypes[t.type as keyof typeof templateTypes]?.[locale] || t.type}
                   </span>
@@ -310,7 +315,7 @@ export default function EmailTemplatesPage() {
                   </span>
                   {!t.isActive && <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded">{locale === 'en' ? 'Inactive' : '非公開'}</span>}
                 </div>
-                <h3 className="font-semibold">{t.subject}</h3>
+                <h3 className="font-semibold text-sm text-gray-600">{t.subject}</h3>
                 <p className="text-sm text-gray-500 mt-1 line-clamp-2">{t.bodyText.substring(0, 100)}...</p>
               </div>
               <div className="flex gap-2">
@@ -547,43 +552,47 @@ export default function EmailTemplatesPage() {
                 : (locale === 'en' ? 'Edit Template' : 'テンプレートを編集')}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {isNewTemplate && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {locale === 'en' ? 'Type' : 'タイプ'}
-                      </label>
-                      <select
-                        className="w-full px-4 py-2 border rounded-lg"
-                        value={formData.type}
-                        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                      >
-                        {Object.entries(templateTypes).map(([key, value]) => (
-                          <option key={key} value={key}>{value[locale]}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {locale === 'en' ? 'Language' : '言語'}
-                      </label>
-                      <select
-                        className="w-full px-4 py-2 border rounded-lg"
-                        value={formData.language}
-                        onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-                      >
-                        <option value="ja">日本語</option>
-                        <option value="en">English</option>
-                      </select>
-                    </div>
-                  </div>
-                  {sampleTemplates[formData.type as keyof typeof sampleTemplates] && (
-                    <Button type="button" variant="outline" size="sm" onClick={applySampleTemplate}>
-                      {locale === 'en' ? 'Apply Sample Template' : 'サンプルを適用'}
-                    </Button>
-                  )}
-                </>
+              <Input
+                label={locale === 'en' ? 'Template Name (optional)' : 'テンプレート名（任意）'}
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder={locale === 'en' ? 'e.g. Standard Confirmation' : '例: 通常予約完了'}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {locale === 'en' ? 'Type' : 'タイプ'}
+                  </label>
+                  <select
+                    className="w-full px-4 py-2 border rounded-lg"
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                  >
+                    {Object.entries(templateTypes).map(([key, value]) => (
+                      <option key={key} value={key}>{value[locale]}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {locale === 'en' ? 'Language' : '言語'}
+                  </label>
+                  <select
+                    className="w-full px-4 py-2 border rounded-lg"
+                    value={formData.language}
+                    onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                  >
+                    <option value="ja">日本語</option>
+                    <option value="en">English</option>
+                  </select>
+                </div>
+              </div>
+
+              {isNewTemplate && sampleTemplates[formData.type as keyof typeof sampleTemplates] && (
+                <Button type="button" variant="outline" size="sm" onClick={applySampleTemplate}>
+                  {locale === 'en' ? 'Apply Sample Template' : 'サンプルを適用'}
+                </Button>
               )}
 
               {/* Variables Reference */}
