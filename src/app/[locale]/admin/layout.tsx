@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams, usePathname } from 'next/navigation'
+import { useParams, usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import {
   Calendar,
   ClipboardList,
@@ -13,6 +14,7 @@ import {
   Mail,
   Settings,
   BarChart3,
+  LogOut,
 } from 'lucide-react'
 
 const navigation = [
@@ -31,7 +33,71 @@ const navigation = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const params = useParams()
   const pathname = usePathname()
+  const router = useRouter()
   const locale = params.locale as string
+
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Skip auth check for login page
+  const isLoginPage = pathname.includes('/admin/login')
+
+  useEffect(() => {
+    if (isLoginPage) {
+      setLoading(false)
+      return
+    }
+
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/session')
+        const data = await response.json()
+
+        if (!data.authenticated) {
+          router.push(`/${locale}/admin/login`)
+          return
+        }
+
+        setUser(data.user)
+      } catch (error) {
+        console.error('Auth check error:', error)
+        router.push(`/${locale}/admin/login`)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    checkAuth()
+  }, [isLoginPage, locale, router])
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+      router.push(`/${locale}/admin/login`)
+      router.refresh()
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+  }
+
+  // Show login page without layout
+  if (isLoginPage) {
+    return <>{children}</>
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-gray-600">読み込み中...</div>
+      </div>
+    )
+  }
+
+  // Not authenticated - will redirect
+  if (!user) {
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -39,6 +105,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="fixed inset-y-0 left-0 w-64 bg-gray-900 text-white">
         <div className="p-4 border-b border-gray-700">
           <h1 className="text-xl font-bold">管理画面</h1>
+          {user && (
+            <p className="text-sm text-gray-400 mt-1">{user.name}</p>
+          )}
         </div>
         <nav className="p-4 space-y-1">
           {navigation.map((item) => {
@@ -59,6 +128,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             )
           })}
         </nav>
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-700">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-3 py-2 w-full text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+            <span>ログアウト</span>
+          </button>
+        </div>
       </aside>
 
       {/* Main content */}
