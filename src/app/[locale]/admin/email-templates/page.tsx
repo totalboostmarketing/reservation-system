@@ -37,18 +37,6 @@ const sampleTemplates = {
   reservation_complete: {
     ja: {
       subject: '【{{storeName}}】ご予約ありがとうございます',
-      bodyHtml: `<p>{{customerName}} 様</p>
-<p>この度は{{storeName}}をご予約いただき、誠にありがとうございます。</p>
-<h3>【ご予約内容】</h3>
-<ul>
-  <li>店舗: {{storeName}}</li>
-  <li>メニュー: {{menuName}}</li>
-  {{#if staffName}}<li>担当: {{staffName}}</li>{{else}}<li>担当: 指名なし</li>{{/if}}
-  <li>日時: {{dateTime}}</li>
-</ul>
-<p>ご予約のキャンセル・変更は下記URLより可能です。<br>
-<a href="{{cancelUrl}}">{{cancelUrl}}</a></p>
-<p>ご来店を心よりお待ちしております。</p>`,
       bodyText: `{{customerName}} 様
 
 この度は{{storeName}}をご予約いただき、誠にありがとうございます。
@@ -66,18 +54,6 @@ const sampleTemplates = {
     },
     en: {
       subject: '[{{storeName}}] Thank you for your reservation',
-      bodyHtml: `<p>Dear {{customerName}},</p>
-<p>Thank you for booking with {{storeName}}.</p>
-<h3>Reservation Details</h3>
-<ul>
-  <li>Store: {{storeName}}</li>
-  <li>Menu: {{menuName}}</li>
-  <li>Staff: {{staffName}}</li>
-  <li>Date/Time: {{dateTime}}</li>
-</ul>
-<p>To cancel or modify your reservation, please visit:<br>
-<a href="{{cancelUrl}}">{{cancelUrl}}</a></p>
-<p>We look forward to seeing you!</p>`,
       bodyText: `Dear {{customerName}},
 
 Thank you for booking with {{storeName}}.
@@ -85,7 +61,7 @@ Thank you for booking with {{storeName}}.
 Reservation Details:
 Store: {{storeName}}
 Menu: {{menuName}}
-Staff: {{staffName}}
+{{#if staffName}}Staff: {{staffName}}{{else}}Staff: Not specified{{/if}}
 Date/Time: {{dateTime}}
 
 To cancel or modify your reservation, please visit:
@@ -97,15 +73,6 @@ We look forward to seeing you!`
   reservation_cancel: {
     ja: {
       subject: '【{{storeName}}】予約キャンセルのお知らせ',
-      bodyHtml: `<p>{{customerName}} 様</p>
-<p>下記のご予約がキャンセルされました。</p>
-<h3>【キャンセルされた予約】</h3>
-<ul>
-  <li>店舗: {{storeName}}</li>
-  <li>メニュー: {{menuName}}</li>
-  <li>日時: {{dateTime}}</li>
-</ul>
-<p>またのご利用を心よりお待ちしております。</p>`,
       bodyText: `{{customerName}} 様
 
 下記のご予約がキャンセルされました。
@@ -119,15 +86,6 @@ We look forward to seeing you!`
     },
     en: {
       subject: '[{{storeName}}] Reservation Cancelled',
-      bodyHtml: `<p>Dear {{customerName}},</p>
-<p>Your reservation has been cancelled.</p>
-<h3>Cancelled Reservation</h3>
-<ul>
-  <li>Store: {{storeName}}</li>
-  <li>Menu: {{menuName}}</li>
-  <li>Date/Time: {{dateTime}}</li>
-</ul>
-<p>We hope to see you again soon!</p>`,
       bodyText: `Dear {{customerName}},
 
 Your reservation has been cancelled.
@@ -143,18 +101,6 @@ We hope to see you again soon!`
   reminder: {
     ja: {
       subject: '【{{storeName}}】明日のご予約リマインド',
-      bodyHtml: `<p>{{customerName}} 様</p>
-<p>明日のご予約についてお知らせいたします。</p>
-<h3>【ご予約内容】</h3>
-<ul>
-  <li>店舗: {{storeName}}</li>
-  <li>メニュー: {{menuName}}</li>
-  {{#if staffName}}<li>担当: {{staffName}}</li>{{else}}<li>担当: 指名なし</li>{{/if}}
-  <li>日時: {{dateTime}}</li>
-</ul>
-<p>ご予約の変更・キャンセルは下記URLより可能です。<br>
-<a href="{{cancelUrl}}">{{cancelUrl}}</a></p>
-<p>お会いできることを楽しみにしております。</p>`,
       bodyText: `{{customerName}} 様
 
 明日のご予約についてお知らせいたします。
@@ -172,18 +118,6 @@ We hope to see you again soon!`
     },
     en: {
       subject: '[{{storeName}}] Reminder: Your appointment tomorrow',
-      bodyHtml: `<p>Dear {{customerName}},</p>
-<p>This is a reminder about your appointment tomorrow.</p>
-<h3>Reservation Details</h3>
-<ul>
-  <li>Store: {{storeName}}</li>
-  <li>Menu: {{menuName}}</li>
-  {{#if staffName}}<li>Staff: {{staffName}}</li>{{else}}<li>Staff: Not specified</li>{{/if}}
-  <li>Date/Time: {{dateTime}}</li>
-</ul>
-<p>To modify or cancel your reservation, please visit:<br>
-<a href="{{cancelUrl}}">{{cancelUrl}}</a></p>
-<p>We look forward to seeing you!</p>`,
       bodyText: `Dear {{customerName}},
 
 This is a reminder about your appointment tomorrow.
@@ -218,10 +152,25 @@ export default function EmailTemplatesPage() {
     type: 'reservation_complete',
     language: 'ja',
     subject: '',
-    bodyHtml: '',
     bodyText: '',
     isActive: true
   })
+
+  // テキストからHTMLを自動生成
+  const textToHtml = (text: string): string => {
+    return text
+      .split('\n\n')
+      .map(paragraph => {
+        const lines = paragraph.split('\n')
+        if (lines.length > 1) {
+          return `<p>${lines.join('<br>\n')}</p>`
+        }
+        return `<p>${paragraph}</p>`
+      })
+      .join('\n')
+      .replace(/{{/g, '{{')
+      .replace(/}}/g, '}}')
+  }
 
   const fetchTemplates = async () => {
     try {
@@ -239,17 +188,23 @@ export default function EmailTemplatesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // テキストからHTMLを自動生成
+    const submitData = {
+      ...formData,
+      bodyHtml: textToHtml(formData.bodyText)
+    }
+
     if (isNewTemplate) {
       await fetch('/api/admin/email-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(submitData),
       })
     } else if (editingTemplate) {
       await fetch(`/api/admin/email-templates/${editingTemplate.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(submitData),
       })
     }
 
@@ -266,7 +221,6 @@ export default function EmailTemplatesPage() {
       type: t.type,
       language: t.language,
       subject: t.subject,
-      bodyHtml: t.bodyHtml,
       bodyText: t.bodyText,
       isActive: t.isActive
     })
@@ -280,7 +234,6 @@ export default function EmailTemplatesPage() {
       type: 'reservation_complete',
       language: 'ja',
       subject: '',
-      bodyHtml: '',
       bodyText: '',
       isActive: true
     })
@@ -311,7 +264,6 @@ export default function EmailTemplatesPage() {
         setFormData({
           ...formData,
           subject: langSample.subject,
-          bodyHtml: langSample.bodyHtml,
           bodyText: langSample.bodyText
         })
       }
@@ -664,26 +616,21 @@ export default function EmailTemplatesPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {locale === 'en' ? 'Body (HTML)' : '本文（HTML）'}
+                  {locale === 'en' ? 'Body' : '本文'}
                 </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  {locale === 'en'
+                    ? 'Enter plain text. HTML formatting will be generated automatically.'
+                    : '普通のテキストで入力してください。HTML形式は自動で生成されます。'}
+                </p>
                 <textarea
-                  className="w-full px-4 py-2 border rounded-lg font-mono text-sm"
-                  rows={10}
-                  value={formData.bodyHtml}
-                  onChange={(e) => setFormData({ ...formData, bodyHtml: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {locale === 'en' ? 'Body (Text)' : '本文（テキスト）'}
-                </label>
-                <textarea
-                  className="w-full px-4 py-2 border rounded-lg font-mono text-sm"
-                  rows={6}
+                  className="w-full px-4 py-2 border rounded-lg text-sm"
+                  rows={12}
                   value={formData.bodyText}
                   onChange={(e) => setFormData({ ...formData, bodyText: e.target.value })}
+                  placeholder={locale === 'en'
+                    ? 'Example:\nDear {{customerName}},\n\nThank you for your reservation.\n\nReservation Details:\nStore: {{storeName}}\nMenu: {{menuName}}'
+                    : '例：\n{{customerName}} 様\n\nご予約ありがとうございます。\n\n【ご予約内容】\n店舗: {{storeName}}\nメニュー: {{menuName}}'}
                   required
                 />
               </div>
