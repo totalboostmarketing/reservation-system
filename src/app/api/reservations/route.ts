@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { parseISO, addMinutes } from 'date-fns'
 import { calculateDiscount } from '@/lib/utils'
-import { sendReservationCompleteEmail } from '@/lib/email'
+import { sendReservationCompleteEmail, sendAdminNotification } from '@/lib/email'
 
 export async function POST(request: Request) {
   try {
@@ -160,7 +160,7 @@ export async function POST(request: Request) {
       },
     })
 
-    // Send confirmation email
+    // Send confirmation email to customer
     await sendReservationCompleteEmail({
       id: reservation.id,
       customerName: reservation.customerName,
@@ -173,6 +173,31 @@ export async function POST(request: Request) {
       menu: reservation.menu,
       staff: reservation.staff,
     })
+
+    // Send notification to admin
+    const dateTimeStr = reservation.startTime.toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    await sendAdminNotification(
+      `【新規予約】${reservation.customerName}様 - ${reservation.store.nameJa}`,
+      `新しい予約が入りました。
+
+【予約内容】
+お客様名: ${reservation.customerName}
+メールアドレス: ${reservation.customerEmail}
+電話番号: ${reservation.customerPhone}
+店舗: ${reservation.store.nameJa}
+メニュー: ${reservation.menu.nameJa}
+担当: ${reservation.staff?.nameJa || '指名なし'}
+日時: ${dateTimeStr}
+料金: ¥${reservation.finalPrice.toLocaleString()}
+
+予約ID: ${reservation.id.slice(-8).toUpperCase()}`
+    )
 
     return NextResponse.json(reservation, { status: 201 })
   } catch (error) {
