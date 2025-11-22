@@ -181,6 +181,7 @@ export async function POST(request: Request) {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'Asia/Tokyo',
     })
     await sendAdminNotification(
       `【新規予約】${reservation.customerName}様 - ${reservation.store.nameJa}`,
